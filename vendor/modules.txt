@@ -1,0 +1,11 @@
+# github.com/go-logr/logr v1.2.0
+## explicit; go 1.16
+github.com/go-logr/logr
+# k8s.io/klog/v2 v2.90.0
+## explicit; go 1.13
+k8s.io/klog/v2
+k8s.io/klog/v2/internal/buffer
+k8s.io/klog/v2/internal/clock
+k8s.io/klog/v2/internal/dbg
+k8s.io/klog/v2/internal/serialize
+k8s.io/klog/v2/internal/severity
