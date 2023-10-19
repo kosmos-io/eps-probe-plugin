@@ -18,8 +18,11 @@
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
 FROM alpine:3.15.0
-WORKDIR /
-#COPY --from=builder /workspace/controller .
-COPY controller /controller
 
-ENTRYPOINT ["/controller"]
+ARG BINARY
+
+#WORKDIR /
+#COPY --from=builder /workspace/controller .
+#COPY controller /controller
+
+COPY ${BINARY} /bin/${BINARY}
