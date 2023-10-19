@@ -61,6 +61,8 @@ spec:
               topologyKey: "kubernetes.io/hostname"
       serviceAccountName: eps-probe-plugin
       containers:
-        - image: registry.paas/cmss/eps-probe-plugin:v0.1
+        - image:  ghcr.io/kosmos-io/eps-probe-plugin:latest
           imagePullPolicy: IfNotPresent
           name: eps-probe-plugin
+          command:
+            - eps-probe-plugin
