@@ -21,8 +21,10 @@ FROM alpine:3.15.0
 
 ARG BINARY
 
+RUN apk add --no-cache ca-certificates
+
 #WORKDIR /
 #COPY --from=builder /workspace/controller .
-#COPY controller /controller
+#CO PY controller /controller
 
 COPY ${BINARY} /bin/${BINARY}

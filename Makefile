@@ -30,7 +30,9 @@ image-eps-probe-plugin:
 # TODO Build and push multi-platform image to DockerHub
 upload-images: image
 	@echo "push images to $(REGISTRY)"
+	docker tag  ${REGISTRY}/eps-probe-plugin:${VERSION}  ${REGISTRY}/eps-probe-plugin:latest
 	docker push ${REGISTRY}/eps-probe-plugin:${VERSION}
+	docker push ${REGISTRY}/eps-probe-plugin:latest
 
 .PHONY: lint
 lint: golangci-lint
