@@ -8,26 +8,29 @@ REGISTRY_USER_NAME?=""
 REGISTRY_PASSWORD?=""
 REGISTRY_SERVER_ADDRESS?=""
 
-TARGETS :=  eps-probe-plugin  \
-
 # Build code.
+.PHONY: build
+build:
+	@make build-eps-probe-plugin GOOS=linux GOARCH=amd64
+#	@make build-eps-probe-plugin GOOS=linux GOARCH=arm64
+#	@make build-eps-probe-plugin GOOS=darwin GOARCH=amd64
+#	@make build-eps-probe-plugin GOOS=darwin GOARCH=arm64
 
-.PHONY: $(TARGETS)
-$(TARGETS):
-	@echo "build binaries"
+build-eps-probe-plugin:
+	hack/build.sh eps-probe-plugin ${GOOS} ${GOARCH}
 
 # Build image.
-IMAGE_TARGET=$(addprefix image-, $(TARGETS))
-.PHONY: $(IMAGE_TARGET)
-$(IMAGE_TARGET):
-	@echo "build images"
+.PHONY: image
+image: build
+	@make image-eps-probe-plugin GOOS=linux GOARCH=amd64
 
-images: $(IMAGE_TARGET)
+image-eps-probe-plugin:
+	VERSION=$(VERSION) REGISTRY=$(REGISTRY) hack/docker.sh eps-probe-plugin ${GOOS} ${GOARCH}
 
-# Build and push multi-platform image to DockerHub
-# todo
-upload-images: images
+# TODO Build and push multi-platform image to DockerHub
+upload-images: image
 	@echo "push images to $(REGISTRY)"
+	docker push ${REGISTRY}/eps-probe-plugin:${VERSION}
 
 .PHONY: lint
 lint: golangci-lint
