@@ -25,6 +25,6 @@ RUN apk add --no-cache ca-certificates
 
 #WORKDIR /
 #COPY --from=builder /workspace/controller .
-#CO PY controller /controller
+#COPY controller /controller
 
 COPY ${BINARY} /bin/${BINARY}
