@@ -4,11 +4,15 @@ import (
 	"context"
 	"time"
 
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 	"sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	"github.com/kosmos.io/eps-probe-plugin/pkg/endpointslice/prober"
@@ -23,18 +27,22 @@ type Reconciler struct {
 func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	klog.V(3).InfoS("Reconcile", "serviceImport", req.NamespacedName)
 
+	cleanup := false
 	svcImport := &v1alpha1.ServiceImport{}
 	if err := r.Controller.client.Get(ctx, req.NamespacedName, svcImport); err != nil {
-		return ctrl.Result{}, client.IgnoreNotFound(err)
+		if !apierrors.IsNotFound(err) {
+			return ctrl.Result{Requeue: true}, err
+		}
+		cleanup = true
 	}
 
-	if svcImport.DeletionTimestamp != nil {
-		r.Controller.proberManager.RemoveServiceImport(svcImport)
+	if cleanup || svcImport.DeletionTimestamp != nil {
+		r.Controller.proberManager.RemoveServiceImport(req.NamespacedName.String())
 		return ctrl.Result{}, nil
 	}
 
 	// Add the prober for the new serviceImport.
-	if !r.Controller.proberManager.GetServiceImport(svcImport) {
+	if !r.Controller.proberManager.GetServiceImport(req.NamespacedName.String()) {
 		r.Controller.proberManager.AddServiceImport(svcImport)
 		return ctrl.Result{}, nil
 	}
@@ -48,9 +56,24 @@ func (r *Reconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Resu
 }
 
 func (r *Reconciler) SetupWithManager(mgr ctrl.Manager) error {
+	endpointSlicePredicate := builder.WithPredicates(predicate.Funcs{
+		CreateFunc: func(event event.CreateEvent) bool {
+			return true
+		},
+		DeleteFunc: func(deleteEvent event.DeleteEvent) bool {
+			return true
+		},
+		UpdateFunc: func(updateEvent event.UpdateEvent) bool {
+			return true
+		},
+		GenericFunc: func(genericEvent event.GenericEvent) bool {
+			return false
+		},
+	},
+	)
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("eps-probe").
-		For(&v1alpha1.ServiceImport{}).
+		For(&v1alpha1.ServiceImport{}, endpointSlicePredicate).
 		Complete(r)
 }
 
