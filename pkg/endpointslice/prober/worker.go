@@ -50,7 +50,11 @@ type record struct {
 	resultRun  int
 }
 
-func newWorker(m *manager, addrs []string, svcImport *v1alpha1.ServiceImport) *worker {
+func newWorker(m *manager, addrs []string, unReachableAddrs []string, svcImport *v1alpha1.ServiceImport) *worker {
+	lastResult := results.Success
+	if len(unReachableAddrs) > 0 {
+		lastResult = results.Failure
+	}
 	w := &worker{
 		stopCh:          make(chan struct{}, 1),
 		manualTriggerCh: make(chan struct{}, 1),
@@ -64,9 +68,8 @@ func newWorker(m *manager, addrs []string, svcImport *v1alpha1.ServiceImport) *w
 			FailureThreshold: m.spec.FailureThreshold,
 		},
 		records:      map[string]record{},
-		latestResult: results.Success,
+		latestResult: lastResult,
 	}
-
 	return w
 }
 
@@ -117,7 +120,6 @@ func (w *worker) doProbe() (keepGoing bool) {
 			"serviceImport", klog.KObj(w.serviceImport))
 
 		w.resultsManager.Set(w.serviceImport, w.addresses, results.Success)
-
 		return false
 	}
 
@@ -150,7 +152,7 @@ func (w *worker) doProbe() (keepGoing bool) {
 	}
 
 	if len(addrs) == 0 && w.latestResult == results.Failure {
-		w.resultsManager.Set(w.serviceImport, w.addresses, results.Success)
+		w.resultsManager.Set(w.serviceImport, []string{}, results.Success)
 		w.latestResult = results.Success
 		klog.V(3).InfoS("Set probe results to success", "serviceImport", klog.KObj(w.serviceImport))
 	}

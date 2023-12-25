@@ -13,6 +13,7 @@ import (
 	"sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
 
 	"github.com/kosmos.io/eps-probe-plugin/pkg/endpointslice/prober/results"
+	"github.com/kosmos.io/eps-probe-plugin/pkg/serviceimport/annotation"
 	"github.com/kosmos.io/eps-probe-plugin/pkg/util"
 )
 
@@ -92,7 +93,13 @@ func (m *manager) AddServiceImport(svcImport *v1alpha1.ServiceImport) {
 		return
 	}
 
-	w := newWorker(m, addrs, svcImport)
+	unreachableAddrs, err := util.ConvertStringToAddresses(svcImport.Annotations[annotation.ServiceImportNotReachableEPSAddr])
+	if err != nil {
+		klog.ErrorS(err, "Can't parse ips from annotations", "serviceImport", klog.KObj(svcImport))
+		return
+	}
+
+	w := newWorker(m, addrs, unreachableAddrs, svcImport)
 	m.workers[key] = w
 	go w.run()
 }
