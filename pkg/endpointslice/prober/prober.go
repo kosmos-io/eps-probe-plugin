@@ -7,15 +7,9 @@ import (
 	"k8s.io/klog/v2"
 
 	"github.com/kosmos.io/eps-probe-plugin/pkg/endpointslice/prober/results"
-	"github.com/kosmos.io/eps-probe-plugin/pkg/util"
 )
 
-func runProber(str string) (map[string]results.Result, error) {
-	addresses, err := util.ConvertStringToAddresses(str)
-	if err != nil {
-		return nil, err
-	}
-
+func runProber(addresses []string) (map[string]results.Result, error) {
 	result := map[string]results.Result{}
 	for _, address := range addresses {
 		pinger, err := ping.NewPinger(address)
@@ -35,6 +29,7 @@ func runProber(str string) (map[string]results.Result, error) {
 		stats := pinger.Statistics()
 		if stats.PacketsRecv >= 1 {
 			result[address] = results.Success
+			klog.V(5).InfoS("Ping success", "address", address)
 		} else {
 			result[address] = results.Failure
 			klog.V(3).InfoS("Ping failed", "address", address)

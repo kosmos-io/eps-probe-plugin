@@ -20,9 +20,19 @@ function util::version_ldflags() {
     GIT_TREESTATE="dirty"
   fi
   BUILDDATE=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
-  LDFLAGS="-X github.com/kosmos.io/kosmos/pkg/version.gitVersion=${GIT_VERSION} \
-                        -X github.com/kosmos.io/kosmos/pkg/version.gitCommit=${GIT_COMMIT_HASH} \
-                        -X github.com/kosmos.io/kosmos/pkg/version.gitTreeState=${GIT_TREESTATE} \
-                        -X github.com/kosmos.io/kosmos/pkg/version.buildDate=${BUILDDATE}"
+  LDFLAGS="-X github.com/kosmos.io/eps-probe-plugin/pkg/version.gitVersion=${GIT_VERSION} \
+                        -X github.com/kosmos.io/eps-probe-plugin/pkg/version.gitCommit=${GIT_COMMIT_HASH} \
+                        -X github.com/kosmos.io/eps-probe-plugin/pkg/version.gitTreeState=${GIT_TREESTATE} \
+                        -X github.com/kosmos.io/eps-probe-plugin/pkg/version.buildDate=${BUILDDATE}"
   echo $LDFLAGS
+}
+
+function util::get_target_source() {
+  local target=$1
+  for s in "${CLUSTERLINK_TARGET_SOURCE[@]}"; do
+    if [[ "$s" == ${target}=* ]]; then
+      echo "${s##${target}=}"
+      return
+    fi
+  done
 }

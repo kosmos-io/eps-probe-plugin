@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"time"
 
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
@@ -53,6 +54,7 @@ func newWorker(m *manager, addrs []string, svcImport *v1alpha1.ServiceImport) *w
 	w := &worker{
 		stopCh:          make(chan struct{}, 1),
 		manualTriggerCh: make(chan struct{}, 1),
+		UpdateCh:        make(chan []string, 1),
 		serviceImport:   svcImport,
 		addresses:       addrs,
 		probeManager:    m,
@@ -76,21 +78,21 @@ func (w *worker) run() {
 	}
 
 	probeTicker := time.NewTicker(probeTickerPeriod)
-
 	defer func() {
 		probeTicker.Stop()
-		w.probeManager.removeWorker(w.serviceImport.UID)
+		namespaceName := w.serviceImport.Namespace + string(types.Separator) + w.serviceImport.Name
+		w.probeManager.removeWorker(namespaceName)
 	}()
 
 probeLoop:
-	for w.doProbe() {
+	for {
 		select {
 		case <-w.stopCh:
 			klog.V(3).InfoS("Stopping prober worker", "serviceImport", klog.KObj(w.serviceImport))
 			break probeLoop
 		case <-probeTicker.C:
+			w.doProbe()
 		case <-w.manualTriggerCh:
-		// TODO: 更新endpointSlice的信息
 		case updates := <-w.UpdateCh:
 			w.addresses = updates
 		}
@@ -119,7 +121,7 @@ func (w *worker) doProbe() (keepGoing bool) {
 		return false
 	}
 
-	result, err := runProber(w.serviceImport.Annotations[ServiceImportEPSAddr])
+	result, err := runProber(w.addresses)
 	if err != nil {
 		return true
 	}

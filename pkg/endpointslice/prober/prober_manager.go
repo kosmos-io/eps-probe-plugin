@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/clock"
 	"sigs.k8s.io/mcs-api/pkg/apis/v1alpha1"
@@ -27,16 +26,16 @@ type Manager interface {
 	AddServiceImport(svcImport *v1alpha1.ServiceImport)
 
 	// GetServiceImport checks if the probe workers has been created.
-	GetServiceImport(svcImport *v1alpha1.ServiceImport) bool
+	GetServiceImport(namespaceName string) bool
 
-	// UpdateService sends UpdateChan to worker.
+	// UpdateServiceImport sends UpdateChan to worker.
 	UpdateServiceImport(svcImport *v1alpha1.ServiceImport) error
 
 	// RemoveServiceImport handles cleaning up the removed ServiceImport.
-	RemoveServiceImport(svcImport *v1alpha1.ServiceImport)
+	RemoveServiceImport(namespaceName string)
 
-	// CleanupServiceImport handles cleaning up ServiceImport which should no logger be existed.
-	CleanupServiceImports(desiredSvcImports map[types.UID]sets.Empty)
+	// CleanupServiceImports handles cleaning up ServiceImport which should no logger be existed.
+	CleanupServiceImports(desiredSvcImports []string)
 }
 
 // NewManager creates a Manager for serviceImport and endpointSlice probing.
@@ -73,14 +72,15 @@ type probeSpec struct {
 }
 
 type probeKey struct {
-	serviceImportUID types.UID
+	namespacedName string
 }
 
 func (m *manager) AddServiceImport(svcImport *v1alpha1.ServiceImport) {
 	m.workerLock.Lock()
 	defer m.workerLock.Unlock()
 
-	key := probeKey{serviceImportUID: svcImport.UID}
+	namespaceName := svcImport.Namespace + string(types.Separator) + svcImport.Name
+	key := probeKey{namespacedName: namespaceName}
 	if _, ok := m.workers[key]; ok {
 		klog.ErrorS(nil, "Probe already exists for serviceImport", "serviceImport", klog.KObj(svcImport))
 		return
@@ -97,8 +97,8 @@ func (m *manager) AddServiceImport(svcImport *v1alpha1.ServiceImport) {
 	go w.run()
 }
 
-func (m *manager) GetServiceImport(svcImport *v1alpha1.ServiceImport) bool {
-	_, ok := m.getWorker(svcImport.UID)
+func (m *manager) GetServiceImport(namespaceName string) bool {
+	_, ok := m.getWorker(namespaceName)
 	return ok
 }
 
@@ -108,8 +108,8 @@ func (m *manager) UpdateServiceImport(svcImport *v1alpha1.ServiceImport) error {
 		klog.ErrorS(err, "Can't parse ips from annotations", "serviceImport", klog.KObj(svcImport))
 		return err
 	}
-
-	worker, ok := m.getWorker(svcImport.UID)
+	namespaceName := svcImport.Namespace + string(types.Separator) + svcImport.Name
+	worker, ok := m.getWorker(namespaceName)
 	if !ok {
 		klog.ErrorS(nil, "Probe does not exists for serviceImport", "serviceImport", klog.KObj(svcImport))
 		return fmt.Errorf("ProbeNotFound")
@@ -119,42 +119,53 @@ func (m *manager) UpdateServiceImport(svcImport *v1alpha1.ServiceImport) error {
 	sort.Strings(desired)
 	sort.Strings(current)
 	if !reflect.DeepEqual(current, desired) {
-		m.workers[probeKey{serviceImportUID: svcImport.UID}].UpdateCh <- desired
+		m.workers[probeKey{namespacedName: namespaceName}].UpdateCh <- desired
 	}
 	return nil
 }
 
-func (m *manager) RemoveServiceImport(svcImport *v1alpha1.ServiceImport) {
+func (m *manager) RemoveServiceImport(namespaceName string) {
 	m.workerLock.RLock()
 	defer m.workerLock.RUnlock()
 
-	klog.V(3).InfoS("Removing serviceImport from prober manager", "serviceImport", klog.KObj(svcImport))
+	klog.V(3).InfoS("Removing serviceImport from prober manager", "serviceImport", namespaceName)
 
-	key := probeKey{serviceImportUID: svcImport.UID}
-	m.workers[key].stop()
+	key := probeKey{namespacedName: namespaceName}
+	if w, ok := m.workers[key]; ok {
+		w.stop()
+	}
 }
 
-func (m *manager) CleanupServiceImports(desiredSvcImports map[types.UID]sets.Empty) {
+func (m *manager) CleanupServiceImports(desiredSvcImports []string) {
 	m.workerLock.RLock()
 	defer m.workerLock.RUnlock()
 
 	for key, worker := range m.workers {
-		if _, ok := desiredSvcImports[key.serviceImportUID]; !ok {
+		if containsString(key.namespacedName, desiredSvcImports) {
 			worker.stop()
 		}
 	}
 }
 
-func (m *manager) getWorker(svcImportUID types.UID) (*worker, bool) {
+func containsString(s string, list []string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+func (m *manager) getWorker(namespaceName string) (*worker, bool) {
 	m.workerLock.RLock()
 	defer m.workerLock.RUnlock()
-	worker, ok := m.workers[probeKey{serviceImportUID: svcImportUID}]
+	worker, ok := m.workers[probeKey{namespacedName: namespaceName}]
 	return worker, ok
 }
 
 // removeWorker called by the worker after exiting.
-func (m *manager) removeWorker(svcImportUID types.UID) {
+func (m *manager) removeWorker(namespaceName string) {
 	m.workerLock.Lock()
 	defer m.workerLock.Unlock()
-	delete(m.workers, probeKey{serviceImportUID: svcImportUID})
+	delete(m.workers, probeKey{namespacedName: namespaceName})
 }
