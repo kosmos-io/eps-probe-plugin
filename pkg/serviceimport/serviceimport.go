@@ -113,9 +113,7 @@ func (c *Controller) syncLoop() {
 	select {
 	case update := <-c.resultsManager.Updates():
 		klog.V(3).InfoS("Received results", "results", update)
-		if update.Result == results.Failure {
-			c.annotationManager.Set("", update.Addresses, update.SvcImportName, update.Namespace)
-		}
+		c.annotationManager.Set("", update.Addresses, update.SvcImportName, update.Namespace)
 	default:
 	}
 }
